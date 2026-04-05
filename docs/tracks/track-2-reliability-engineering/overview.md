@@ -34,3 +34,4 @@ When you join the project, reliability docs tell you two critical things quickly
 - `error-handling-contract.md`
 - `resilience-and-recovery.md`
 - `bonus-quest-report.md`
+- `diagrams.md`

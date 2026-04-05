@@ -39,3 +39,4 @@ Implemented artifacts in repository:
 - `load-testing.md`
 - `monitoring-and-alerting.md`
 - `operations-playbook.md`
+- `diagrams.md`

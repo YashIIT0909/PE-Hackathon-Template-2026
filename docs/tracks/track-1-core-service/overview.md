@@ -94,3 +94,4 @@ Seeding is skipped if users already exist.
 - `api-reference.md`
 - `data-model-and-validation.md`
 - `developer-workflow.md`
+- `diagrams.md`
