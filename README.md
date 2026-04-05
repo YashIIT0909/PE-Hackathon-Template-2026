@@ -1,4 +1,4 @@
-# PE Hackathon Template 2026
+# Production Ready URL shortener
 
 Production-style URL shortener service built for the MLH PE Hackathon tracks:
 
