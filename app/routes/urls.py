@@ -88,8 +88,6 @@ def create_url(url: URLCreate, background_tasks: BackgroundTasks, db: Session = 
         url_id=db_url.id,
         user_id=url.user_id,
         event_type="created",
-        details={"short_code": short_code, "original_url": url.original_url},
-        engine=db.get_bind()
         details={"short_code": short_code, "original_url": str(url.original_url)},
     )
     
@@ -143,8 +141,7 @@ def update_url(id: int, url_update: URLUpdate, background_tasks: BackgroundTasks
         url_id=db_url.id,
         user_id=db_url.user_id,
         event_type="updated",
-        details={"short_code": db_url.short_code, "original_url": db_url.original_url},
-        engine=db.get_bind()
+        details={"short_code": db_url.short_code, "original_url": str(db_url.original_url)},
     )
     
     return db_url
