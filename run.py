@@ -4,9 +4,8 @@ import time
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
-
+from app import create_app
 from app.database import Base, engine, SessionLocal
-from app.routes import users, urls, events
 from app.models.domain import User, URL, Event
 from app.observability import get_system_metrics, read_recent_logs, setup_logging
 import csv
@@ -66,7 +65,6 @@ def metrics():
 @app.get("/logs", tags=["observability"])
 def logs(limit: int = Query(default=100, ge=1, le=1000)):
     return {"items": read_recent_logs(log_file_path, limit=limit)}
-
 def seed_database():
     db = SessionLocal()
     if not db.query(User).first():
