@@ -1,197 +1,407 @@
-# MLH PE Hackathon — Flask + Peewee + PostgreSQL Template
+# PE Hackathon Template 2026
 
-A minimal hackathon starter template. You get the scaffolding and database wiring — you build the models, routes, and CSV loading logic.
+Production-style URL shortener service built for the MLH PE Hackathon tracks:
 
-**Stack:** Flask · Peewee ORM · PostgreSQL · uv
+- Reliability Engineering
+- Scalability Engineering
+- Incident Response
+- Documentation
 
-## **Important**
+The app is implemented with FastAPI, SQLAlchemy, PostgreSQL, Redis, Nginx, Prometheus, Alertmanager, Grafana, pytest, and k6.
 
-You need to work with around the seed files that you can find in [MLH PE Hackathon](https://mlh-pe-hackathon.com) platform. This will help you build the schema for the database and have some data to do some testing and submit your project for judging. If you need help with this, reach out on Discord or on the Q&A tab on the platform.
+## Getting Started
 
-## Prerequisites
+### Prerequisites
 
-- **uv** — a fast Python package manager that handles Python versions, virtual environments, and dependencies automatically.
-  Install it with:
-  ```bash
-  # macOS / Linux
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+- Python 3.13+
+- `uv`
+- Docker + Docker Compose for the full stack
 
-  # Windows (PowerShell)
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-  For other methods see the [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
-- PostgreSQL running locally (you can use Docker or a local instance)
-
-## uv Basics
-
-`uv` manages your Python version, virtual environment, and dependencies automatically — no manual `python -m venv` needed.
-
-| Command | What it does |
-|---------|--------------|
-| `uv sync` | Install all dependencies (creates `.venv` automatically) |
-| `uv run <script>` | Run a script using the project's virtual environment |
-| `uv add <package>` | Add a new dependency |
-| `uv remove <package>` | Remove a dependency |
-
-## Quick Start
+Install `uv` if needed:
 
 ```bash
-# 1. Clone the repo
-git clone <repo-url> && cd mlh-pe-hackathon
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# 2. Install dependencies
+### Local Development
+
+Install dependencies:
+
+```bash
 uv sync
-
-# 3. Create the database
-createdb hackathon_db
-
-# 4. Configure environment
-cp .env.example .env   # edit if your DB credentials differ
-
-# 5. Run the server
-uv run run.py
-
-# 6. Verify
-curl http://localhost:5000/health
-# → {"status":"ok"}
 ```
 
-## Project Structure
+Run the app:
 
-```
-mlh-pe-hackathon/
-├── app/
-│   ├── __init__.py          # App factory (create_app)
-│   ├── database.py          # DatabaseProxy, BaseModel, connection hooks
-│   ├── models/
-│   │   └── __init__.py      # Import your models here
-│   └── routes/
-│       └── __init__.py      # register_routes() — add blueprints here
-├── .env.example             # DB connection template
-├── .gitignore               # Python + uv gitignore
-├── .python-version          # Pin Python version for uv
-├── pyproject.toml           # Project metadata + dependencies
-├── run.py                   # Entry point: uv run run.py
-└── README.md
+```bash
+uv run python run.py
 ```
 
-## How to Add a Model
+Open:
 
-1. Create a file in `app/models/`, e.g. `app/models/product.py`:
+- App: `http://127.0.0.1:8000`
+- Health: `http://127.0.0.1:8000/health`
 
-```python
-from peewee import CharField, DecimalField, IntegerField
+Quick check:
 
-from app.database import BaseModel
-
-
-class Product(BaseModel):
-    name = CharField()
-    category = CharField()
-    price = DecimalField(decimal_places=2)
-    stock = IntegerField()
+```bash
+curl http://127.0.0.1:8000/health
 ```
 
-2. Import it in `app/models/__init__.py`:
+Expected response:
 
-```python
-from app.models.product import Product
+```json
+{"status":"ok"}
 ```
 
-3. Create the table (run once in a Python shell or a setup script):
+### Database Behavior
 
-```python
-from app.database import db
-from app.models.product import Product
+- Local startup falls back to SQLite using `app.db` when no external database is configured.
+- Docker Compose uses PostgreSQL.
+- Docker Compose also runs a one-time `app-init` container to create tables and seed baseline data before the app replicas start serving traffic.
 
-db.create_tables([Product])
+### Full Docker Stack
+
+Start everything:
+
+```bash
+docker compose up -d --build
+docker compose ps
 ```
 
-## How to Add Routes
+Main endpoints:
 
-1. Create a blueprint in `app/routes/`, e.g. `app/routes/products.py`:
+- App via Nginx: `http://127.0.0.1:8000`
+- Prometheus: `http://127.0.0.1:9090`
+- Alertmanager: `http://127.0.0.1:9093`
+- Grafana: `http://127.0.0.1:3000`
 
-```python
-from flask import Blueprint, jsonify
-from playhouse.shortcuts import model_to_dict
+Stop:
 
-from app.models.product import Product
-
-products_bp = Blueprint("products", __name__)
-
-
-@products_bp.route("/products")
-def list_products():
-    products = Product.select()
-    return jsonify([model_to_dict(p) for p in products])
+```bash
+docker compose down
 ```
 
-2. Register it in `app/routes/__init__.py`:
+Clean reset:
 
-```python
-def register_routes(app):
-    from app.routes.products import products_bp
-    app.register_blueprint(products_bp)
+```bash
+docker compose down -v --remove-orphans
 ```
 
-## How to Load CSV Data
+## API Endpoints
 
-```python
-import csv
-from peewee import chunked
-from app.database import db
-from app.models.product import Product
+### Health
 
-def load_csv(filepath):
-    with open(filepath, newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
+- `GET /health`
 
-    with db.atomic():
-        for batch in chunked(rows, 100):
-            Product.insert_many(batch).execute()
+### Users
+
+- `GET /users`
+- `GET /users/{id}`
+- `POST /users`
+- `POST /users/bulk`
+- `PUT /users/{id}`
+- `DELETE /users/{id}`
+
+### URLs
+
+- `GET /urls`
+- `GET /urls/{id}`
+- `GET /urls/{short_code}/redirect`
+- `POST /urls`
+- `PUT /urls/{id}`
+- `DELETE /urls/{id}`
+
+### Events
+
+- `GET /events`
+- `POST /events`
+
+### Observability
+
+- `GET /metrics`
+- `GET /metrics/json`
+- `GET /logs`
+
+Detailed API contract:
+
+- [docs/tracks/track-1-core-service/api-reference.md](docs/tracks/track-1-core-service/api-reference.md)
+
+## Reliability Engineering
+
+### Bronze
+
+Implemented:
+
+- pytest unit tests
+- CI workflow for automated test execution
+- working `GET /health`
+
+Verify:
+
+```bash
+uv run pytest
+curl http://127.0.0.1:8000/health
 ```
 
-## Useful Peewee Patterns
+### Silver
 
-```python
-from peewee import fn
-from playhouse.shortcuts import model_to_dict
+Implemented:
 
-# Select all
-products = Product.select()
+- `pytest-cov`
+- integration tests against the API and DB
+- CI gate that blocks downstream deploy flow if tests fail
+- documented `404` and `500` behavior
 
-# Filter
-cheap = Product.select().where(Product.price < 10)
+Key docs:
 
-# Get by ID
-p = Product.get_by_id(1)
+- [docs/error-handling.md](docs/error-handling.md)
+- [docs/tracks/track-2-reliability-engineering/error-handling-contract.md](docs/tracks/track-2-reliability-engineering/error-handling-contract.md)
 
-# Create
-Product.create(name="Widget", category="Tools", price=9.99, stock=50)
+### Gold
 
-# Convert to dict (great for JSON responses)
-model_to_dict(p)
+Implemented:
 
-# Aggregations
-avg_price = Product.select(fn.AVG(Product.price)).scalar()
-total = Product.select(fn.SUM(Product.stock)).scalar()
+- `70%` coverage gate
+- graceful JSON validation errors
+- chaos/restart demo support
+- failure mode documentation
+- hidden-edge reliability handling:
+  - duplicate email and username rejection
+  - short-code collision retry
+  - inactive URL handling
+  - malformed CSV handling
+  - audit event creation for URL lifecycle actions
 
-# Group by
-from peewee import fn
-query = (Product
-         .select(Product.category, fn.COUNT(Product.id).alias("count"))
-         .group_by(Product.category))
+Key docs:
+
+- [docs/failure-modes.md](docs/failure-modes.md)
+- [docs/resilience-runbook.md](docs/resilience-runbook.md)
+- [docs/tracks/track-2-reliability-engineering/resilience-and-recovery.md](docs/tracks/track-2-reliability-engineering/resilience-and-recovery.md)
+
+## Scalability Engineering
+
+### Bronze
+
+Load-test scripts included:
+
+- `loadtest_bronze.js`
+- `loadtest_silver.js`
+- `loadtest_gold.js`
+
+Run:
+
+```bash
+k6 run loadtest_bronze.js
 ```
 
-## Tips
+### Silver
 
-- Use `model_to_dict` from `playhouse.shortcuts` to convert model instances to dictionaries for JSON responses.
-- Wrap bulk inserts in `db.atomic()` for transactional safety and performance.
-- The template uses `teardown_appcontext` for connection cleanup, so connections are closed even when requests fail.
-- Check `.env.example` for all available configuration options.
+Implemented:
 
-## Reliability Notes
+- 3 app replicas
+- Nginx load balancer
+- Docker Compose multi-service topology
 
-- Error handling behavior for `404` and `500` responses is documented in [docs/error-handling.md](docs/error-handling.md).
-- Failure modes and the chaos restart demo are documented in [docs/failure-modes.md](docs/failure-modes.md).
+Check running containers:
+
+```bash
+docker compose ps
+```
+
+### Gold
+
+Implemented:
+
+- Redis caching for hot API responses
+- PostgreSQL + Redis + Nginx + multi-replica app topology
+- load-tested 500+ concurrent users
+- bottleneck tuning for DB initialization, connection pooling, and cache-backed reads
+
+Latest verified Gold run:
+
+- `p95 latency: 513.08ms`
+- `http_req_failed: 3.32%`
+- all endpoint checks passed in the k6 script
+
+Run:
+
+```bash
+k6 run loadtest_gold.js
+```
+
+Target a custom URL:
+
+```bash
+BASE_URL=http://127.0.0.1:8000 k6 run loadtest_gold.js
+```
+
+Redis cache evidence:
+
+```bash
+docker compose exec redis redis-cli INFO stats
+docker compose exec redis redis-cli INFO keyspace
+docker compose exec redis redis-cli KEYS '*'
+```
+
+The strongest proof points are:
+
+- `keyspace_hits`
+- `keyspace_misses`
+- `db0:keys=...`
+
+Scalability docs:
+
+- [docs/tracks/track-3-scalability-and-monitoring/load-testing.md](docs/tracks/track-3-scalability-and-monitoring/load-testing.md)
+- [docs/tracks/track-3-scalability-and-monitoring/operations-playbook.md](docs/tracks/track-3-scalability-and-monitoring/operations-playbook.md)
+
+## Incident Response
+
+### Bronze
+
+Implemented:
+
+- structured JSON logging
+- metrics endpoints
+- log access without SSH via `/logs`
+
+Verify:
+
+```bash
+curl http://127.0.0.1:8000/metrics/json
+curl "http://127.0.0.1:8000/logs?limit=20"
+```
+
+### Silver
+
+Implemented:
+
+- Prometheus alert rules
+- Alertmanager routing
+- Slack/Discord webhook placeholders
+- manual alert testing support
+
+Key files:
+
+- [monitoring/prometheus/alert_rules.yml](monitoring/prometheus/alert_rules.yml)
+- [monitoring/alertmanager/alertmanager.yml](monitoring/alertmanager/alertmanager.yml)
+- [docs/manual-alert-testing.md](docs/manual-alert-testing.md)
+
+### Gold
+
+Implemented:
+
+- Grafana dashboard
+- command-center style observability stack
+- emergency/runbook documentation
+- logs + metrics driven diagnosis workflow
+
+Key docs:
+
+- [docs/observability.md](docs/observability.md)
+- [docs/resilience-runbook.md](docs/resilience-runbook.md)
+- [docs/tracks/track-3-scalability-and-monitoring/monitoring-and-alerting.md](docs/tracks/track-3-scalability-and-monitoring/monitoring-and-alerting.md)
+- [monitoring/grafana/dashboards/gold-command-center.json](monitoring/grafana/dashboards/gold-command-center.json)
+
+## Documentation Quest
+
+### Bronze
+
+Included:
+
+- README setup guide
+- API documentation
+- architecture/diagram docs
+
+### Silver
+
+Included:
+
+- deployment-oriented Docker flow
+- troubleshooting/failure docs
+- environment/config documentation
+
+### Gold
+
+Included:
+
+- runbooks
+- design/decision-oriented docs
+- load/capacity proof through k6 results and scale-out docs
+
+Documentation index:
+
+- [docs/README.md](docs/README.md)
+- [docs/SUMMARY.md](docs/SUMMARY.md)
+- [docs/tracks/track-1-core-service/diagrams.md](docs/tracks/track-1-core-service/diagrams.md)
+- [docs/tracks/track-2-reliability-engineering/diagrams.md](docs/tracks/track-2-reliability-engineering/diagrams.md)
+- [docs/tracks/track-3-scalability-and-monitoring/diagrams.md](docs/tracks/track-3-scalability-and-monitoring/diagrams.md)
+
+## Testing
+
+Run the complete suite:
+
+```bash
+uv run pytest
+```
+
+Coverage is enforced with:
+
+- `pytest-cov`
+- `--cov-fail-under=70`
+
+## Environment Variables
+
+Common variables used by the repo:
+
+- `DATABASE_URL`
+- `DATABASE_HOST`
+- `DATABASE_PORT`
+- `DATABASE_USER`
+- `DATABASE_PASSWORD`
+- `DATABASE_NAME`
+- `REDIS_URL`
+- `PORT`
+- `HOST`
+- `WEB_CONCURRENCY`
+- `ENABLE_STARTUP_SEED`
+- `RUN_DB_INIT_ON_STARTUP`
+- `DB_POOL_SIZE`
+- `DB_MAX_OVERFLOW`
+- `DB_POOL_TIMEOUT`
+- `DB_POOL_RECYCLE`
+- `LOG_LEVEL`
+- `LOG_FILE`
+- `LOG_MAX_BYTES`
+- `LOG_BACKUP_COUNT`
+- `SLACK_WEBHOOK_URL`
+- `DISCORD_WEBHOOK_URL`
+
+Base example config lives in [.env.example](.env.example).
+
+## Project Layout
+
+```text
+app/
+  __init__.py
+  cache.py
+  database.py
+  observability.py
+  models/
+  routes/
+docs/
+monitoring/
+nginx/
+seed_data/
+tests/
+compose.yaml
+Dockerfile
+loadtest_bronze.js
+loadtest_silver.js
+loadtest_gold.js
+run.py
+```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
