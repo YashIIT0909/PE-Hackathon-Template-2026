@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: hackathon_db
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -13,6 +15,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -21,11 +24,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      
-  app-1:
-    build:
-      context: .
-      network: host
+    restart: unless-stopped
+
+  app-1: &app-base
+    build: .
     environment:
       - DATABASE_HOST=db
       - DATABASE_USER=postgres
@@ -33,16 +35,16 @@ services:
       - DATABASE_NAME=hackathon_db
       - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
+      - ENABLE_STARTUP_SEED=true
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
   app-2:
-    build:
-      context: .
-      network: host
+    <<: *app-base
     environment:
       - DATABASE_HOST=db
       - DATABASE_USER=postgres
@@ -50,16 +52,10 @@ services:
       - DATABASE_NAME=hackathon_db
       - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - ENABLE_STARTUP_SEED=false # Only one replica seeds the DB
 
   app-3:
-    build:
-      context: .
-      network: host
+    <<: *app-base
     environment:
       - DATABASE_HOST=db
       - DATABASE_USER=postgres
@@ -67,12 +63,8 @@ services:
       - DATABASE_NAME=hackathon_db
       - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-  
+      - ENABLE_STARTUP_SEED=false
+
   nginx:
     image: nginx:alpine
     ports:
@@ -83,53 +75,8 @@ services:
       - app-1
       - app-2
       - app-3
-
-volumes:
-  postgres_data:
-# ============================================================
-# Full monitoring stack: App + PostgreSQL + Prometheus + Alertmanager
-# Usage:  docker compose up -d
-# UIs:    App → http://localhost:8000
-#         Prometheus → http://localhost:9090
-#         Alertmanager → http://localhost:9093
-# ============================================================
-
-services:
-  # ---------- PostgreSQL ----------
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: hackathon_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # ---------- FastAPI App ----------
-  app:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_USER: postgres
-      DATABASE_PASSWORD: postgres
-      DATABASE_NAME: hackathon_db
-      LOG_LEVEL: INFO
-    depends_on:
-      postgres:
-        condition: service_healthy
     restart: unless-stopped
 
-  # ---------- Prometheus ----------
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -141,10 +88,9 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=7d"
     depends_on:
-      - app
+      - app-1
     restart: unless-stopped
 
-  # ---------- Alertmanager ----------
   alertmanager:
     image: prom/alertmanager:latest
     ports:
@@ -161,5 +107,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  pgdata:
+  postgres_data:
   prometheus_data:
